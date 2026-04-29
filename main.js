@@ -55,22 +55,82 @@
     revealEls.forEach(el => el.classList.add('is-visible'));
   }
 
-  // ---------- Projects slider arrows ----------
-  // The grid is 2-up on desktop, 1-up on mobile; arrows scroll the grid horizontally on mobile.
+  // ---------- Projects carousel ----------
+  // Slides the grid via transform. Works at any number of projects.
+  // Desktop: 2 cards visible per "page". Mobile: 1 card per page.
   const grid = document.getElementById('projGrid');
   const prevBtn = document.getElementById('projPrev');
   const nextBtn = document.getElementById('projNext');
+  const dotsEl = document.getElementById('projDots');
 
-  if (grid && prevBtn && nextBtn) {
-    const scrollByCard = (dir) => {
-      const card = grid.querySelector('.project-card');
-      if (!card) return;
-      const distance = card.getBoundingClientRect().width + 32; // gap
-      grid.scrollBy({ left: dir * distance, behavior: 'smooth' });
+  if (grid && prevBtn && nextBtn && dotsEl) {
+    const cards = Array.from(grid.querySelectorAll('.project-card'));
+    let currentIndex = 0;
+
+    const getVisibleCount = () => (window.innerWidth <= 1024 ? 1 : 2);
+    const getPageCount = () => Math.max(1, cards.length - getVisibleCount() + 1);
+
+    const buildDots = () => {
+      dotsEl.innerHTML = '';
+      const pages = getPageCount();
+      // Hide the dots container entirely if there's nothing to navigate
+      if (pages <= 1) {
+        dotsEl.style.display = 'none';
+        return;
+      }
+      dotsEl.style.display = 'flex';
+      for (let i = 0; i < pages; i++) {
+        const dot = document.createElement('button');
+        dot.className = 'projects__dot' + (i === currentIndex ? ' is-active' : '');
+        dot.setAttribute('aria-label', `Go to project ${i + 1}`);
+        dot.addEventListener('click', () => goTo(i));
+        dotsEl.appendChild(dot);
+      }
     };
 
-    prevBtn.addEventListener('click', () => scrollByCard(-1));
-    nextBtn.addEventListener('click', () => scrollByCard(1));
+    const updateView = () => {
+      const visible = getVisibleCount();
+      const cardWidth = grid.querySelector('.project-card').getBoundingClientRect().width;
+      const gap = parseFloat(getComputedStyle(grid).columnGap) || 32;
+      const offset = currentIndex * (cardWidth + gap);
+      grid.style.transform = `translateX(-${offset}px)`;
+
+      // Update arrow disabled states
+      const atStart = currentIndex === 0;
+      const atEnd = currentIndex >= cards.length - visible;
+      prevBtn.setAttribute('aria-disabled', atStart);
+      nextBtn.setAttribute('aria-disabled', atEnd);
+
+      // Update active dot
+      Array.from(dotsEl.children).forEach((dot, i) => {
+        dot.classList.toggle('is-active', i === currentIndex);
+      });
+    };
+
+    const goTo = (index) => {
+      const maxIndex = cards.length - getVisibleCount();
+      currentIndex = Math.max(0, Math.min(index, maxIndex));
+      updateView();
+    };
+
+    prevBtn.addEventListener('click', () => goTo(currentIndex - 1));
+    nextBtn.addEventListener('click', () => goTo(currentIndex + 1));
+
+    // Rebuild on resize so mobile/desktop transitions stay correct
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        // Clamp index in case viewport got narrower and current is beyond max
+        const maxIndex = Math.max(0, cards.length - getVisibleCount());
+        currentIndex = Math.min(currentIndex, maxIndex);
+        buildDots();
+        updateView();
+      }, 120);
+    });
+
+    buildDots();
+    updateView();
   }
 
   // ---------- Smooth-scroll offset for fixed nav ----------
